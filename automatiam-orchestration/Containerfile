@@ -1,0 +1,44 @@
+# Local and development image.
+#
+# Not the deployed image. That one builds on the enterprise quay-nonprod base and is the DevOps
+# team's to own - the same split as iamigo-api's local/Dockerfile versus Docker/Dockerfile. This
+# exists so the service can run as a container beside iamigo-api in the local stack, which is the
+# only way to demonstrate the chain end to end.
+FROM docker.io/library/python:3.12-slim
+
+WORKDIR /app
+
+# Corporate TLS interception breaks pip inside a container: the proxy re-signs the connection to
+# pypi.org with a root the base image does not carry, so pip reports "self-signed certificate in
+# certificate chain" for a host curl and the browser reach fine.
+#
+# The fix is to trust the corporate root, not to stop checking. Export it once (the same bundle
+# the live EHAP test needs - see tests/integration/test_horizon_live.py) and copy it into the
+# build context:
+#
+#   cp ~/.certs/corp-ca-bundle.pem local/corp-ca-bundle.pem
+#
+# Certificate verification stays on throughout. local/corp-ca-bundle.pem is gitignored: it is only
+# public root certificates, but it is machine-specific and does not belong in the repository.
+COPY local/corp-ca-bundle.pem /usr/local/share/ca-certificates/corporate-roots.crt
+RUN update-ca-certificates
+
+# Point both pip and Python at the system trust store, which now includes the corporate roots.
+ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
+COPY pyproject.toml ./
+COPY src ./src
+
+# No build toolchain needed: every pinned dependency publishes manylinux wheels, including
+# psycopg[binary]. If that stops being true this fails at build time rather than silently
+# falling back to a source build.
+RUN pip install --no-cache-dir . \
+    && useradd --uid 1001 --no-create-home --shell /usr/sbin/nologin app
+
+USER 1001
+EXPOSE 8080
+
+# Settings come from the environment; nothing is baked in. See automatiam-orchestration.md.
+ENTRYPOINT ["python", "-m", "automatiam"]
