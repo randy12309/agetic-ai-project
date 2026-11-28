@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: automatiam-mcp-config
+  labels:
+    app.kubernetes.io/name: automatiam-mcp
+data:
+  # Every value here is an example. The real issuer, audience and OneIAM base UR […]
+  # specific and are not known to this repository.
+  oidcIssuerUri: "https://REPLACE_ME/oauth2/default"
+  oidcAudience: "automatiam-mcp"
+  # Comma-separated Okta admission groups for this environment. Empty denies all.
+  requiredGroups: ""
+  oneIamBaseUrl: "https://REPLACE_ME"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: automatiam-mcp-opa-config
+  labels:
+    app.kubernetes.io/name: automatiam-mcp
+data:
+  # Bundle configuration, not policy. The policy itself is built and signed in a […]
+  # and pulled from there; baking Rego into this ConfigMap would fork it.
+  opa-config.yaml: |
+    services:
+      automatiam-policies:
+        # Private S3 bucket. OPA signs requests with SigV4 as the pod's own IRSA […]
+        # there is no bundle credential to provision, mount or rotate. The sidec […]
+        # AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE, which IRSA injects into […]
+        # in the pod. The role needs s3:GetObject on this prefix and nothing els […]
+        #
+        # Verify these key names against the OPA 1.22.3 reference before first d […]
+        # mechanism is right, but credential block naming moves between releases […]
+        url: https://REPLACE_ME_BUCKET.s3.REPLACE_ME_REGION.amazonaws.com
+        credentials:
+          s3_signing:
+            web_identity_credentials:
+              aws_region: REPLACE_ME_REGION
+    keys:
+      automatiam-policies:
+        # Set the algorithm and PEM public key used by the bundle publisher.
+        algorithm: RS256
+        key: |
+          REPLACE_ME_BUNDLE_SIGNING_PUBLIC_KEY_PEM
+    bundles:
+      automatiam-tools:
+        service: automatiam-policies
+        resource: automatiam-tools/bundle.tar.gz
+        polling:
+          min_delay_seconds: 60
+          max_delay_seconds: 120
+        signing:
+          keyid: automatiam-policies
+    decision_logs:
+      console: true
+    status:
+      console: true

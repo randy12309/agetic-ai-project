@@ -1,0 +1,35 @@
+# Local development. Synthetic IAM data, no enterprise network access required.
+#
+# The mock adapters additionally require this profile to be active (see MockGuar […]
+# these values into a deployed configuration does not bring them up.
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AUTOMATIAM_MCP_OIDC_ISSUER_URI:http://localhost:9000/oauth2/default}
+          audiences: ${AUTOMATIAM_MCP_OIDC_AUDIENCE:automatiam-mcp-local}
+
+logging:
+  structured:
+    format:
+      console: ${AUTOMATIAM_MCP_LOG_FORMAT:}
+  level:
+    com.elevance.automatiam.mcp: DEBUG
+
+automatiam:
+  mcp:
+    auth:
+      # Development-only group names following the estate's ONEIAM-<FUNCTION>-<E […]
+      # The real groups for this service are not registered yet; see automatiam- […]
+      required-groups:
+        - ONEIAM-FULLADMIN-DEVROLE
+        - ONEIAM-READONLYADMIN-DEVROLE
+        - ONEIAM-ENTITLEMENTGOV-DEV
+    mocks:
+      enabled: true
+    opa:
+      # Points at a locally run sidecar. With mocks enabled, MockToolPolicyClien […]
+      # and nothing is sent here; unset mocks to exercise a real OPA.
+      base-url: http://127.0.0.1:8181

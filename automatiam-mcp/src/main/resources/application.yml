@@ -1,0 +1,115 @@
+spring:
+  application:
+    name: automatiam-mcp
+  main:
+    banner-mode: off
+  codec:
+    # Bounds how large a single MCP request body may be before it is rejected. T […]
+    # here take identifiers and short search terms; nothing legitimate approache […]
+    max-in-memory-size: 256KB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # No default. The server will not start without an issuer, which is pr […]
+          # starting with token validation pointed at nothing.
+          issuer-uri: ${AUTOMATIAM_MCP_OIDC_ISSUER_URI}
+          audiences: ${AUTOMATIAM_MCP_OIDC_AUDIENCE}
+
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: automatiam-mcp
+        version: 1.0.0
+        # Stateless Streamable HTTP: no per-session state, so replicas need no s […]
+        # and a pod can be replaced mid-conversation without the client noticing […]
+        protocol: stateless
+        type: ASYNC
+        # Original line outside the captured overlap.
+        instructions: >
+          IAM tools expose approved OneIAM capabilities. All tools are
+          read-only; none grants, provisions or changes access. Tool discovery does not imply
+          authorization - each invocation is authorized separately.
+        capabilities:
+          tool: true
+          prompt: false
+          resource: false
+          completion: false
+        streamable-http:
+          mcp-endpoint: /mcp
+        annotation-scanner:
+          enabled: true
+
+server:
+  port: 8080
+  shutdown: graceful
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: INFO
+    automatiam.mcp.audit: INFO
+    com.elevance.automatiam.mcp: INFO
+
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: automatiam-mcp
+
+automatiam:
+  mcp:
+    auth:
+      client-id-claim: cid
+      # Claim priority mirrors DomainIdResolver in oneiam-shared-models: heighte […]
+      # account, then standard network login, then Okta subject as a last resort […]
+      domain-id-claims:
+        - heightenedDomainID
+        - domainID
+        - sub
+      groups-claim: groups
+      # Okta groups admitted to the MCP endpoint. Environment-suffixed in this e […]
+      # no shared default; empty means nobody is admitted. Admission is not auth […]
+      # decides each invocation and receives the full group list.
+      required-groups: ${AUTOMATIAM_MCP_REQUIRED_GROUPS:}
+      # Interim mechanism for carrying the end user, pending token exchange. Off […]
+      # the trusted-peer list is empty, so enabling the flag alone still asserts […]
+      # must be set deliberately, per environment. See automatiam-mcp.md, "Carry […]
+      subject-assertion:
+        enabled: ${AUTOMATIAM_MCP_SUBJECT_ASSERTION_ENABLED:false}
+        header: X-AutomatIAM-Acting-For
+        trusted-peer-subjects: ${AUTOMATIAM_MCP_TRUSTED_PEER_SUBJECTS:}
+    opa:
+      base-url: http://127.0.0.1:8181
+      authorization-path: /v1/data/automatiam/tools/authz
+      simulation-path: /v1/data/automatiam/tools/simulate
+      timeout: 2s
+    oneiam:
+      base-url: ${AUTOMATIAM_MCP_ONEIAM_BASE_URL:}
+      connect-timeout: 2s
+      response-timeout: 10s
+      max-retries: 2
+      retry-backoff: 200ms
+      max-connections: 50
+    tool:
+      execution-timeout: 15s
+      max-concurrent-invocations: 64
+    mocks:
+      enabled: false

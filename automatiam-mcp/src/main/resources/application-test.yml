@@ -1,0 +1,32 @@
+# Automated tests. No enterprise network access, no real issuer, no real OPA.
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Blanked so the base profile's required placeholder does not have to […]
+          # the issuer-uri decoder backs off: resolving issuer metadata is a sta […]
+          # jwk-set-uri builds a decoder that fetches lazily, and tests never re […]
+          issuer-uri: ""
+          audiences: ""
+          jwk-set-uri: http://localhost/test-jwks
+
+logging:
+  structured:
+    format:
+      console: ""
+
+automatiam:
+  mcp:
+    auth:
+      required-groups:
+        - ONEIAM-FULLADMIN-DEVROLE
+        - ONEIAM-READONLYADMIN-DEVROLE
+        - ONEIAM-ENTITLEMENTGOV-DEV
+        - ONEIAM-MCP-TESTROLE
+    mocks:
+      enabled: true
+    tool:
+      execution-timeout: 5s
+      max-concurrent-invocations: 8

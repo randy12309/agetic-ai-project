@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: automatiam-mcp
+  labels:
+    app.kubernetes.io/name: automatiam-mcp
+    app.kubernetes.io/part-of: automatiam
+spec:
+  # ClusterIP, never LoadBalancer or NodePort. The MCP endpoint is internal; the […]
+  # reaches it in-cluster.
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: automatiam-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  # OPA's 8181 is deliberately absent. It binds to loopback inside the pod. […]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: automatiam-mcp
+  labels:
+    app.kubernetes.io/name: automatiam-mcp

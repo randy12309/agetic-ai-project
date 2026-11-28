@@ -1,0 +1,87 @@
+# Local integration stack for automatiam-mcp, following the estate convention in […]
+# oneid-serviceidservice/compose.yaml and oneiam-shared-services/compose.yaml: c […]
+# the infrastructure, the services themselves run from Maven with the 'local' pr […]
+# the Java services would mean rebuilding an image on every code change for no b […]
+#
+# Podman:
+#   cd local && podman compose up -d
+#   podman compose logs -f opensearch-seed      # confirm the indices were seede […]
+#   podman compose down -v                      # tear down including volumes
+#
+# Then, in separate shells:
+#   (oneiam-entitlement-manager-service) ./mvnw spring-boot:run -Dspring-boot.ru […]
+#   (automatiam-mcp)                     ./mvnw spring-boot:run -Dspring-boot.ru […]
+#                                          -Dspring-boot.run.arguments=--automat […]
+#
+# See local/README.md for the EM authentication caveat, which is the one thing t […]
+# solve for you.
+
+services:
+  # Single node, security plugin disabled. This is a throwaway local index, not […]
+  # production cluster – no HA, no retention, no TLS. The production shape lives […]
+  opensearch:
+    image: docker.io/opensearchproject/opensearch:2.11.0
+    container_name: ${CONTAINER_PREFIX:-automatiam-mcp}-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "127.0.0.1:${OPENSEARCH_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  # One-shot. Creates the three indices EM's entitlement-detail endpoint reads a […]
+  # synthetic document set. Dynamic mapping is deliberate: the production mappings […]
+  # repository and inventing them would be worse than letting OpenSearch infer […]
+  # whose field names were read out of EntitlementDetailService.
+  opensearch-seed:
+    image: docker.io/curlimages/curl:8.11.1
+    container_name: ${CONTAINER_PREFIX:-automatiam-mcp}-opensearch-seed
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - ./seed:/seed:ro,z
+    entrypoint: ["/bin/sh", "/seed/seed.sh"]
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+
+  # The policy sidecar, as a standalone container locally. Version pinned to mat […]
+  # deploy/eks/deployment.yaml. Serves the development sample from deploy/opa/po […]
+  # authoritative bundle lives in automatiam-policies and is not used locally.
+  opa:
+    image: docker.io/openpolicyagent/opa:1.22.3
+    container_name: ${CONTAINER_PREFIX:-automatiam-mcp}-opa
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--diagnostic-addr=0.0.0.0:8282"
+      - "--log-level=info"
+      - "/policy"
+    ports:
+      # Published only because the application runs outside the pod locally. In […]
+      # on loopback and is never in the Service - see deploy/opa/README.md.
+      - "127.0.0.1:${OPA_PORT:-8181}:8181"
+    volumes:
+      - ../deploy/opa/policy:/policy:ro,z
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "--fail", "http.send({\"method\":\"GET\",\"url\":\"http://127.0.0.1:8282/health\"}).status_code == 200"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  opensearch-data:

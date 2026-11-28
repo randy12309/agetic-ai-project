@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- Spring Boot 4 rather than iam-spring-boot-starter-parent, for the same reason as
+         automatiam-knowledge: that parent is on Boot 3.5.x and bans org.springframework.boot:*:[4.0.0,).
+         The build block below replicates what it contributes. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+    <groupId>com.elevance.iam</groupId>
+    <artifactId>automatiam-mcp</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>AutomatIAM MCP Server</name>
+    <description>MCP tool surface exposing approved read-only OneIAM capabilities to AutomatIAM workflows</description>
+
+    <properties>
+        <java.version>25</java.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <spring-boot.version>4.1.1</spring-boot.version>
+        <!-- Highest Spring AI present in oneiamjava-maven-public as of 2026-11-06; 2.1.0 is absent.
+             Pulls io.modelcontextprotocol.sdk 2.1.0. See automatiam-mcp.md. -->
+        <spring-ai.version>2.0.2</spring-ai.version>
+        <lombok.version>1.18.46</lombok.version>
+        <jacoco-version>0.8.14</jacoco-version>
+        <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
+        <maven.test.skip>false</maven.test.skip>
+        <code.covered.ratio.minimum>0.90</code.covered.ratio.minimum>
+        <sonar.host.url>https://sonarqube.elevancehealth.com/</sonar.host.url>
+        <sonar.projectKey>automatiam-mcp</sonar.projectKey>
+        <sonar.projectName>AutomatIAM MCP Server</sonar.projectName>
+        <sonar.exclusions>**/model/**, **/config/**, **/exception/**, **/*Application.*</sonar.exclusions>
+        <sonar.coverage.exclusions>**/model/**, **/config/**, **/exception/**, **/*Application.*
+        </sonar.coverage.exclusions>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>snapshots</id>
+            <name>oneiamjava-maven-snapshots</name>
+            <url>https://artifactory.elevancehealth.com:443/artifactory/oneiamjava-maven-snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>releases</id>
+            <name>oneiamjava-maven-releases</name>
+            <url>https://artifactory.elevancehealth.com:443/artifactory/oneiamjava-maven-releases</url>
+        </repository>
+    </distributionManagement>
+
+    <build>
+        <!-- Stable artifact name so the Dockerfile's COPY and ENTRYPOINT do not carry the version. -->
+        <finalName>automatiam-mcp</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Java 25 no longer discovers annotation processors on the compile
+                         classpath, so Lombok silently no-ops without this. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Declared explicitly: the parent only manages its version, so without this the
+                 repackage goal never runs and the jar has no main manifest attribute. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-boot-generation</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <exclude>org.springframework.boot:*:[3.0.0,4.0.0)</exclude>
+                                        <exclude>com.elevance.iam:iam-spring-boot-starter-*</exclude>
+                                    </excludes>
+                                    <message>This repository is on Spring Boot ${spring-boot.version}. The
+                                        iam-spring-boot-starter-* modules are built against Boot 3 and
+                                        register the same autoconfiguration bean names from a second
+                                        generation; the context then fails to refresh at startup.</message>
+                                </bannedDependencies>
+                                <requireSameVersions>
+                                    <dependencies>
+                                        <dependency>org.springframework.ai</dependency>
+                                    </dependencies>
+                                </requireSameVersions>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco-version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/model/**/*</exclude>
+                        <exclude>**/config/**/*</exclude>
+                        <exclude>**/exception/**/*</exclude>
+                        <exclude>**/*Application.*</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule implementation="org.jacoco.maven.RuleConfiguration">
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit implementation="org.jacoco.report.check.Limit">
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${code.covered.ratio.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

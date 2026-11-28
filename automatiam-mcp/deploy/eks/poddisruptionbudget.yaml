@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: automatiam-mcp
+  labels:
+    app.kubernetes.io/name: automatiam-mcp
+spec:
+  # Keeps one replica serving through a node drain. Paired with maxUnavailable:
+  # Deployment, a rollout and a drain cannot between them take the service to ze […]
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: automatiam-mcp
